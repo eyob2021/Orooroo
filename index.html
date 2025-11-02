@@ -1,24 +1,142 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="om">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Search from CSV</title>
-    <style>
-        .data-block {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 10px;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bilida — Lakkoofsa irraa Jecha Argadhu</title>
+  <style>
+    :root{--brand:#0b74de}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Noto Sans',sans-serif;margin:18px;background:#f7f9fc;color:#111}
+    .card{max-width:820px;margin:18px auto;padding:18px;border-radius:10px;background:#fff;box-shadow:0 6px 20px rgba(10,20,40,0.06)}
+    h1{font-size:1.25rem;margin:0 0 8px}
+    p.small{color:#556;margin-top:0}
+    .row{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+    input[type=text]{padding:10px;border-radius:8px;border:1px solid #e3e7ee;min-width:220px}
+    button{padding:10px 14px;border-radius:8px;border:0;background:var(--brand);color:#fff;cursor:pointer}
+    .result{margin-top:18px;padding:12px;border-radius:8px;background:#fbfdff;border:1px solid #eef6ff;min-height:48px}
+    .muted{color:#667; font-size:0.95rem}
+    .note{font-size:0.85rem;color:#b33;margin-top:8px}
+    .examples{margin-top:8px;color:#555;font-size:0.95rem}
+    .found-key{font-weight:700}
+  </style>
 </head>
 <body>
-    <h2>Search for a Value</h2>
-    <form method="post" action="search.php">
-        <label for="search">Search:</label>
-        <input type="text" name="search" id="search">
-        <input type="submit" value="Search">
-    </form>
+  <main class="card">
+    <h1>Bilida — Lakkoofsa irraa Jecha Argadhu</h1>
+    <p class="small">Faayila <code>data.csv</code> repository kee keessatti kaa'i. Fuula kana namoonni GitHub Pages irra daaw'achuudhaan lakkoofsa galchanii jecha (Column B) argachuu danda'u.</p>
+
+    <div class="row">
+      <input id="numInput" type="text" placeholder="Lakkoofsa galchi (fakkeenya: 1)" />
+      <button id="searchBtn">Barbaadi</button>
+      <button id="reloadBtn" title="CSV haaromsu">Reload CSV</button>
+    </div>
+
+    <div class="examples muted">Fakkeenya CSV (data.csv):<br>
+      <code>1,&lt;h1&gt;tokko&lt;/h1&gt;</code><br>
+      <code>2,tokko lama</code>
+    </div>
+
+    <div id="status" class="muted" style="margin-top:12px">CSV hin fe'amne.</div>
+
+    <div id="result" class="result" aria-live="polite">Lakkoofsa tokko galchi, booda <strong>Barbaadi</strong> cuqaasi.</div>
+
+    <p class="note">Hubachiisa: CSV kee namootaaf sa'a; yoo Column B keessatti HTML jiraate, fuula kana keessatti akka barreeffama (escaped) agarsiifna — kanaaf mul'isuuf bareesu taasisuu yoo barbaadde, naaf himi.</p>
+  </main>
+
+  <!-- PapaParse CDN for robust parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    // Configuration
+    const CSV_PATH = './data.csv'; // put data.csv in same folder as index.html
+
+    let mapAB = new Map();
+    let rowsCount = 0;
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const inputEl = document.getElementById('numInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const reloadBtn = document.getElementById('reloadBtn');
+
+    function setStatus(s){ statusEl.textContent = s; }
+    function setResult(html){ resultEl.innerHTML = html; }
+
+    // Escape HTML for safe display (we'll show Column B as text)
+    function escapeHtml(s){
+      if (s === undefined || s === null) return '';
+      return String(s)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
+
+    // Load CSV (using PapaParse so large file ok)
+    function loadCSV(){
+      setStatus('CSV fe'amu... (loading...)');
+      mapAB.clear();
+      rowsCount = 0;
+      setResult('Loading CSV — please wait...');
+      Papa.parse(CSV_PATH, {
+        download: true,
+        header: false,
+        skipEmptyLines: true,
+        worker: true,
+        step: function(row){ // called per row (memory-friendly)
+          const r = row.data;
+          // r is an array of columns
+          const key = (r[0] !== undefined) ? String(r[0]).trim() : '';
+          const val = (r[1] !== undefined) ? String(r[1]).trim() : '';
+          if (key !== '') {
+            // allow multiple entries per key -> store as array
+            if (!mapAB.has(key)) mapAB.set(key, []);
+            mapAB.get(key).push(val);
+          }
+          rowsCount++;
+        },
+        complete: function(){
+          setStatus(`CSV fe'ame: ${rowsCount.toLocaleString()} rows loaded. Keys: ${mapAB.size.toLocaleString()}.`);
+          setResult('Lakkoofsa tokko galchi, booda <strong>Barbaadi</strong> cuqaasi.');
+        },
+        error: function(err){
+          setStatus('CSV fe'amuu hin dandeenye: ' + err.message);
+          setResult('CSV fe\'amu keessatti dogongora jiru — console ilaali.');
+          console.error('PapaParse error', err);
+        }
+      });
+    }
+
+    // Search function
+    function searchNumber(){
+      const q = inputEl.value.trim();
+      if (!q) { setResult('<em>Lakkoofsa galchi.</em>'); return; }
+      if (mapAB.size === 0){ setResult('CSV hin fe'amne. Reload yookiin data.csv fayyadami.'); return; }
+
+      // exact match on key
+      const found = mapAB.get(q);
+      if (!found || found.length === 0){
+        setResult(`<div>Lakkoofsa <span class="found-key">${escapeHtml(q)}</span> hin argamne.</div>`);
+        return;
+      }
+
+      // show all values (Column B) for the key
+      // display as plain text (escaped) so HTML in CSV is not executed
+      let html = `<div>Key: <span class="found-key">${escapeHtml(q)}</span></div><hr>`;
+      html += '<div>';
+      for (let i = 0; i < found.length; i++){
+        html += `<div><strong>${i+1}.</strong> ${escapeHtml(found[i])}</div>`;
+      }
+      html += '</div>';
+      setResult(html);
+    }
+
+    // Event listeners
+    searchBtn.addEventListener('click', searchNumber);
+    inputEl.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') searchNumber(); });
+    reloadBtn.addEventListener('click', loadCSV);
+
+    // Load on start
+    loadCSV();
+  </script>
 </body>
 </html>
